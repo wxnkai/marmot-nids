@@ -1,0 +1,130 @@
+# =============================================================================
+# marmot-nids — pyproject.toml
+# Tool configuration for Ruff, Black, pytest, and project metadata.
+# =============================================================================
+
+[project]
+name = "marmot-nids"
+version = "0.1.0"
+description = "Modular Network Intrusion Detection System with LLM-based contextual analysis and pluggable blockchain audit logging"
+requires-python = ">=3.13"
+license = { file = "LICENSE" }
+readme = "README.md"
+keywords = ["nids", "intrusion-detection", "network-security", "llm", "blockchain"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+]
+
+# =============================================================================
+# Ruff — linter
+# https://docs.astral.sh/ruff/
+# =============================================================================
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+src = ["core", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "S",   # flake8-bandit (security)
+    "B",   # flake8-bugbear
+    "A",   # flake8-builtins
+    "C4",  # flake8-comprehensions
+    "PT",  # flake8-pytest-style
+    "RUF", # Ruff-specific
+    "UP",  # pyupgrade
+    "T20", # flake8-print (no stray print() in production code)
+    "SIM", # flake8-simplify
+    "ERA", # eradicate (no commented-out code)
+    "PL",  # pylint
+]
+ignore = [
+    "S101",   # Allow assert statements (used for type narrowing + invariants)
+    "S603",   # subprocess calls — reviewed per use
+    "PLR2004", # Magic value comparisons — acceptable in security thresholds
+    "ERA001",  # Commented-out code — allow for explanatory context
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests: allow assert, hardcoded test credentials, and subprocess usage
+"tests/**/*.py" = ["S101", "S106", "S105", "T20", "PLR2004"]
+# Scripts: allow print for CLI output, subprocess, and hardcoded paths
+"scripts/**/*.py" = ["T20", "S603", "S607"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["core"]
+
+# =============================================================================
+# Black — formatter
+# https://black.readthedocs.io/
+# =============================================================================
+
+[tool.black]
+line-length = 88
+target-version = ["py313"]
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+    \.git
+  | \.venv
+  | build
+  | dist
+  | contracts
+)/
+'''
+
+# =============================================================================
+# pytest
+# https://docs.pytest.org/
+# =============================================================================
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = [
+    "--strict-markers",
+    "--tb=short",
+    "-q",
+]
+markers = [
+    "unit: fast, isolated unit tests with no I/O",
+    "integration: tests that exercise multiple components together",
+    "slow: tests that are deliberately slow (e.g. LLM batch processing)",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+# =============================================================================
+# Coverage
+# =============================================================================
+
+[tool.coverage.run]
+source = ["core"]
+omit = [
+    "tests/*",
+    "scripts/*",
+    "core/main.py",  # startup/lifespan wiring — covered by integration tests
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 80
+
+# =============================================================================
+# Bandit — referenced in CI via: bandit -c .banditrc -r core/
+# See .banditrc for full configuration.
+# =============================================================================

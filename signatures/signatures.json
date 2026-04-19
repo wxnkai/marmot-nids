@@ -1,0 +1,247 @@
+{
+  "version": "1.0",
+  "description": "marmot-nids signature rule set v1.0 — covers volumetric DoS, reconnaissance scans, brute-force attacks, and protocol anomalies.",
+  "signatures": [
+    {
+      "id": "sig_001_syn_flood",
+      "name": "SYN Flood",
+      "description": "High-volume TCP SYN packets with no corresponding ACK responses. Indicates a TCP SYN flood DoS attack exhausting connection tables on the target host.",
+      "severity": "critical",
+      "mitre_technique": "T1498.001",
+      "protocols": [6],
+      "confidence": 0.95,
+      "conditions": [
+        {"field": "syn_ratio",    "op": ">=", "value": 0.9},
+        {"field": "packet_count", "op": ">=", "value": 100}
+      ]
+    },
+    {
+      "id": "sig_002_rst_flood",
+      "name": "RST Flood",
+      "description": "High-volume TCP RST packets injected to forcibly terminate established connections, causing denial-of-service without requiring a volume-based IP signature.",
+      "severity": "high",
+      "mitre_technique": "T1498.001",
+      "protocols": [6],
+      "confidence": 0.90,
+      "conditions": [
+        {"field": "rst_ratio",    "op": ">=", "value": 0.9},
+        {"field": "packet_count", "op": ">=", "value": 50}
+      ]
+    },
+    {
+      "id": "sig_003_icmp_flood",
+      "name": "ICMP Flood",
+      "description": "High-rate ICMP echo requests indicative of a ping flood denial-of-service attack. Saturates the target network link or exhausts CPU handling echo replies.",
+      "severity": "high",
+      "mitre_technique": "T1498.001",
+      "protocols": [1],
+      "confidence": 0.90,
+      "conditions": [
+        {"field": "packet_count", "op": ">=", "value": 100},
+        {"field": "mean_iat",     "op": "<=", "value": 0.01}
+      ]
+    },
+    {
+      "id": "sig_004_null_scan",
+      "name": "TCP NULL Scan",
+      "description": "TCP packets with no control flags set (flags=0x00). Used during network reconnaissance to probe open ports and infer firewall state — RFC 793-compliant hosts respond with RST to closed ports and silently drop packets on open ports.",
+      "severity": "medium",
+      "mitre_technique": "T1046",
+      "protocols": [6],
+      "confidence": 0.95,
+      "conditions": [
+        {"field": "syn_count",    "op": "==", "value": 0},
+        {"field": "fin_count",    "op": "==", "value": 0},
+        {"field": "rst_count",    "op": "==", "value": 0},
+        {"field": "ack_count",    "op": "==", "value": 0},
+        {"field": "psh_count",    "op": "==", "value": 0},
+        {"field": "urg_count",    "op": "==", "value": 0},
+        {"field": "packet_count", "op": ">=", "value": 1}
+      ]
+    },
+    {
+      "id": "sig_005_fin_scan",
+      "name": "TCP FIN Scan",
+      "description": "TCP packets carrying only the FIN flag, sent without a prior SYN handshake. Used for stealthy port scanning that bypasses some stateless packet filters and older firewall configurations.",
+      "severity": "medium",
+      "mitre_technique": "T1046",
+      "protocols": [6],
+      "confidence": 0.90,
+      "conditions": [
+        {"field": "fin_count",    "op": ">=", "value": 1},
+        {"field": "syn_count",    "op": "==", "value": 0},
+        {"field": "ack_count",    "op": "==", "value": 0},
+        {"field": "rst_count",    "op": "==", "value": 0}
+      ]
+    },
+    {
+      "id": "sig_006_xmas_scan",
+      "name": "TCP XMAS Scan",
+      "description": "TCP packets with FIN, PSH, and URG flags simultaneously set (the Christmas-tree pattern). Used for stealthy reconnaissance — RFC 793-compliant hosts send RST to closed ports and ignore packets on open ports.",
+      "severity": "medium",
+      "mitre_technique": "T1046",
+      "protocols": [6],
+      "confidence": 0.95,
+      "conditions": [
+        {"field": "fin_count",    "op": ">=", "value": 1},
+        {"field": "psh_count",    "op": ">=", "value": 1},
+        {"field": "urg_count",    "op": ">=", "value": 1},
+        {"field": "syn_count",    "op": "==", "value": 0},
+        {"field": "ack_count",    "op": "==", "value": 0}
+      ]
+    },
+    {
+      "id": "sig_007_ssh_brute_force",
+      "name": "SSH Brute Force",
+      "description": "High packet count on SSH port (22) within a short time window, indicative of automated credential guessing or dictionary-based brute-force against the SSH service.",
+      "severity": "high",
+      "mitre_technique": "T1110.001",
+      "protocols": [6],
+      "confidence": 0.85,
+      "conditions": [
+        {"field": "min_port",     "op": "==", "value": 22},
+        {"field": "packet_count", "op": ">=", "value": 20},
+        {"field": "duration",     "op": "<=", "value": 60}
+      ]
+    },
+    {
+      "id": "sig_008_http_brute_force",
+      "name": "HTTP Brute Force",
+      "description": "High packet count on HTTP port (80) within a short time window, indicative of web application credential stuffing or form-based brute-force login attempts.",
+      "severity": "high",
+      "mitre_technique": "T1110.001",
+      "protocols": [6],
+      "confidence": 0.80,
+      "conditions": [
+        {"field": "min_port",     "op": "==", "value": 80},
+        {"field": "packet_count", "op": ">=", "value": 50},
+        {"field": "duration",     "op": "<=", "value": 120}
+      ]
+    },
+    {
+      "id": "sig_009_https_brute_force",
+      "name": "HTTPS Brute Force",
+      "description": "High packet count on HTTPS port (443) within a short time window, indicative of web application credential stuffing over encrypted transport.",
+      "severity": "high",
+      "mitre_technique": "T1110.001",
+      "protocols": [6],
+      "confidence": 0.80,
+      "conditions": [
+        {"field": "min_port",     "op": "==", "value": 443},
+        {"field": "packet_count", "op": ">=", "value": 50},
+        {"field": "duration",     "op": "<=", "value": 120}
+      ]
+    },
+    {
+      "id": "sig_010_dns_amplification",
+      "name": "DNS Amplification Attack",
+      "description": "High-volume large UDP responses from DNS port (53) with disproportionate payload size, indicative of a DNS reflection amplification DDoS attack using open resolvers.",
+      "severity": "high",
+      "mitre_technique": "T1498.002",
+      "protocols": [17],
+      "confidence": 0.85,
+      "conditions": [
+        {"field": "min_port",     "op": "==", "value": 53},
+        {"field": "mean_pkt_len", "op": ">=", "value": 512},
+        {"field": "packet_count", "op": ">=", "value": 10}
+      ]
+    },
+    {
+      "id": "sig_011_rdp_brute_force",
+      "name": "RDP Brute Force",
+      "description": "High packet count on RDP port (3389) within a short time window, indicative of automated Windows Remote Desktop credential guessing or password-spraying.",
+      "severity": "high",
+      "mitre_technique": "T1110.001",
+      "protocols": [6],
+      "confidence": 0.85,
+      "conditions": [
+        {"field": "min_port",     "op": "==", "value": 3389},
+        {"field": "packet_count", "op": ">=", "value": 20},
+        {"field": "duration",     "op": "<=", "value": 60}
+      ]
+    },
+    {
+      "id": "sig_012_smb_scan",
+      "name": "SMB Service Scan",
+      "description": "Short-lived flow to SMB port (445) with minimal packet exchange, indicative of automated reconnaissance targeting Windows file sharing services and lateral movement paths.",
+      "severity": "medium",
+      "mitre_technique": "T1046",
+      "protocols": [6],
+      "confidence": 0.75,
+      "conditions": [
+        {"field": "min_port",     "op": "==", "value": 445},
+        {"field": "packet_count", "op": "<=", "value": 5},
+        {"field": "duration",     "op": "<=", "value": 5}
+      ]
+    },
+    {
+      "id": "sig_013_telnet_access",
+      "name": "Telnet Access Detected",
+      "description": "Active Telnet session detected on port 23. Telnet transmits credentials and session data in cleartext and must not be used on any production or internal network segment.",
+      "severity": "medium",
+      "mitre_technique": "T1021",
+      "protocols": [6],
+      "confidence": 0.99,
+      "conditions": [
+        {"field": "min_port",     "op": "==", "value": 23},
+        {"field": "packet_count", "op": ">=", "value": 3}
+      ]
+    },
+    {
+      "id": "sig_014_icmp_large_payload",
+      "name": "Large ICMP Payload",
+      "description": "ICMP packets with abnormally large payload (mean >= 1000 bytes), potentially indicating a Ping-of-Death variant, ICMP tunneling for covert C2, or data exfiltration via the ICMP protocol.",
+      "severity": "medium",
+      "mitre_technique": "T1095",
+      "protocols": [1],
+      "confidence": 0.80,
+      "conditions": [
+        {"field": "mean_pkt_len", "op": ">=", "value": 1000},
+        {"field": "packet_count", "op": ">=", "value": 1}
+      ]
+    },
+    {
+      "id": "sig_015_ftp_brute_force",
+      "name": "FTP Brute Force",
+      "description": "High packet count on FTP port (21) within a short time window, indicative of automated FTP credential guessing or dictionary attack against cleartext file transfer services.",
+      "severity": "high",
+      "mitre_technique": "T1110.001",
+      "protocols": [6],
+      "confidence": 0.85,
+      "conditions": [
+        {"field": "min_port",     "op": "==", "value": 21},
+        {"field": "packet_count", "op": ">=", "value": 20},
+        {"field": "duration",     "op": "<=", "value": 60}
+      ]
+    },
+    {
+      "id": "sig_016_udp_exfiltration",
+      "name": "UDP High-Volume Data Exfiltration",
+      "description": "High-volume UDP flow with large mean payload size in a short period, potentially indicating data exfiltration over an unencrypted non-standard UDP channel bypassing DLP controls.",
+      "severity": "high",
+      "mitre_technique": "T1048.003",
+      "protocols": [17],
+      "confidence": 0.70,
+      "conditions": [
+        {"field": "byte_count",   "op": ">=", "value": 10000000},
+        {"field": "mean_pkt_len", "op": ">=", "value": 1400},
+        {"field": "duration",     "op": "<=", "value": 60}
+      ]
+    },
+    {
+      "id": "sig_017_low_and_slow_scan",
+      "name": "Low-and-Slow Port Scan",
+      "description": "Very few TCP SYN packets sent at low rate, consistent with a deliberate slow scan designed to evade rate-based detection thresholds and IDS alert suppression windows.",
+      "severity": "low",
+      "mitre_technique": "T1046",
+      "protocols": [6],
+      "confidence": 0.60,
+      "conditions": [
+        {"field": "packet_count", "op": ">=", "value": 2},
+        {"field": "packet_count", "op": "<=", "value": 10},
+        {"field": "mean_iat",     "op": ">=", "value": 30},
+        {"field": "syn_ratio",    "op": ">=", "value": 0.5}
+      ]
+    }
+  ]
+}

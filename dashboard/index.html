@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>marmot-nids — Intrusion Detection Dashboard</title>
+    <meta name="description" content="Real-time network intrusion detection dashboard with live alert streaming">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #111827;
+            --bg-card: #1a1f35;
+            --bg-glass: rgba(26, 31, 53, 0.7);
+            --border-subtle: rgba(99, 102, 241, 0.15);
+            --border-glow: rgba(99, 102, 241, 0.4);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-gradient: linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7);
+            --severity-critical: #ef4444;
+            --severity-critical-bg: rgba(239, 68, 68, 0.12);
+            --severity-high: #f97316;
+            --severity-high-bg: rgba(249, 115, 22, 0.12);
+            --severity-medium: #eab308;
+            --severity-medium-bg: rgba(234, 179, 8, 0.12);
+            --severity-low: #22c55e;
+            --severity-low-bg: rgba(34, 197, 94, 0.12);
+            --ws-connected: #22c55e;
+            --ws-disconnected: #ef4444;
+            --radius: 12px;
+            --radius-sm: 8px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Background effect */
+        body::before {
+            content: '';
+            position: fixed;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.06) 0%, transparent 50%),
+                        radial-gradient(ellipse at 80% 20%, rgba(168, 85, 247, 0.04) 0%, transparent 50%);
+            z-index: 0;
+            animation: bgShift 20s ease-in-out infinite alternate;
+        }
+        @keyframes bgShift {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            100% { transform: translate(-5%, 3%) rotate(2deg); }
+        }
+
+        .app { position: relative; z-index: 1; }
+
+        /* Header */
+        .header {
+            padding: 20px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-subtle);
+            backdrop-filter: blur(20px);
+            background: rgba(10, 14, 26, 0.8);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .logo-icon {
+            width: 36px; height: 36px;
+            background: var(--accent-gradient);
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px;
+            box-shadow: 0 0 24px rgba(99, 102, 241, 0.3);
+        }
+        .logo h1 {
+            font-size: 20px;
+            font-weight: 700;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .logo-subtitle {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .ws-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            border: 1px solid var(--border-subtle);
+        }
+        .ws-dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--ws-disconnected);
+            animation: pulse 2s ease-in-out infinite;
+        }
+        .ws-dot.connected { background: var(--ws-connected); }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+        /* Main content */
+        .main { padding: 24px 32px; max-width: 1440px; margin: 0 auto; }
+
+        /* Stats row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: var(--bg-glass);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius);
+            padding: 20px;
+            backdrop-filter: blur(12px);
+            transition: border-color 0.3s, transform 0.2s;
+        }
+        .stat-card:hover {
+            border-color: var(--border-glow);
+            transform: translateY(-2px);
+        }
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            background: var(--accent-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .stat-sub {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        /* Alert feed */
+        .feed-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .feed-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        .feed-filters {
+            display: flex;
+            gap: 8px;
+        }
+        .filter-btn {
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 1px solid var(--border-subtle);
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+        .filter-btn:hover,
+        .filter-btn.active {
+            border-color: var(--border-glow);
+            color: var(--text-primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        /* Alert cards */
+        .alert-feed { display: flex; flex-direction: column; gap: 8px; }
+
+        .alert-card {
+            background: var(--bg-glass);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-sm);
+            padding: 16px 20px;
+            display: grid;
+            grid-template-columns: auto 1fr auto auto;
+            align-items: center;
+            gap: 16px;
+            backdrop-filter: blur(8px);
+            transition: border-color 0.3s, transform 0.2s;
+            animation: slideIn 0.3s ease-out;
+        }
+        .alert-card:hover {
+            border-color: var(--border-glow);
+            transform: translateX(4px);
+        }
+        .alert-card.new {
+            animation: flashIn 0.5s ease-out;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes flashIn {
+            0% { border-color: rgba(99, 102, 241, 0.8); box-shadow: 0 0 20px rgba(99, 102, 241, 0.3); }
+            100% { border-color: var(--border-subtle); box-shadow: none; }
+        }
+
+        .severity-badge {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            min-width: 70px;
+            text-align: center;
+        }
+        .severity-critical { background: var(--severity-critical-bg); color: var(--severity-critical); }
+        .severity-high { background: var(--severity-high-bg); color: var(--severity-high); }
+        .severity-medium { background: var(--severity-medium-bg); color: var(--severity-medium); }
+        .severity-low { background: var(--severity-low-bg); color: var(--severity-low); }
+
+        .alert-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .alert-name {
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .alert-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+        .alert-flow {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-family: 'SF Mono', 'Cascadia Code', monospace;
+        }
+        .alert-time {
+            font-size: 12px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+        .alert-confidence {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        @media (max-width: 768px) {
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .alert-card { grid-template-columns: auto 1fr; }
+            .alert-time, .alert-confidence { display: none; }
+            .main { padding: 16px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <div class="logo">
+                <div class="logo-icon">🦫</div>
+                <div>
+                    <h1>marmot-nids</h1>
+                    <div class="logo-subtitle">Intrusion Detection System</div>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="ws-status">
+                    <div class="ws-dot" id="wsDot"></div>
+                    <span id="wsLabel">Disconnected</span>
+                </div>
+            </div>
+        </header>
+
+        <main class="main">
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-label">Total Alerts</div>
+                    <div class="stat-value" id="totalAlerts">0</div>
+                    <div class="stat-sub">All time</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Critical</div>
+                    <div class="stat-value" id="criticalCount">0</div>
+                    <div class="stat-sub">Requires immediate action</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">High</div>
+                    <div class="stat-value" id="highCount">0</div>
+                    <div class="stat-sub">Elevated risk</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Active Feed</div>
+                    <div class="stat-value" id="feedRate">0</div>
+                    <div class="stat-sub">Alerts/minute</div>
+                </div>
+            </div>
+
+            <div class="feed-header">
+                <div class="feed-title">🔔 Live Alert Feed</div>
+                <div class="feed-filters">
+                    <button class="filter-btn active" data-filter="all">All</button>
+                    <button class="filter-btn" data-filter="critical">Critical</button>
+                    <button class="filter-btn" data-filter="high">High</button>
+                    <button class="filter-btn" data-filter="medium">Medium</button>
+                    <button class="filter-btn" data-filter="low">Low</button>
+                </div>
+            </div>
+
+            <div class="alert-feed" id="alertFeed">
+                <div class="empty-state">
+                    <div class="empty-state-icon">🛡️</div>
+                    <p>No alerts detected. Monitoring...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        const WS_URL = `ws://${window.location.host}/ws/alerts`;
+
+        let ws = null;
+        let alerts = [];
+        let activeFilter = 'all';
+        let recentTimestamps = [];
+
+        // ----------------------------------------------------------------
+        // WebSocket connection
+        // ----------------------------------------------------------------
+        function connectWS() {
+            ws = new WebSocket(WS_URL);
+
+            ws.onopen = () => {
+                document.getElementById('wsDot').classList.add('connected');
+                document.getElementById('wsLabel').textContent = 'Connected';
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const alert = JSON.parse(event.data);
+                    addAlert(alert);
+                } catch (e) {
+                    console.warn('Invalid alert JSON:', e);
+                }
+            };
+
+            ws.onclose = () => {
+                document.getElementById('wsDot').classList.remove('connected');
+                document.getElementById('wsLabel').textContent = 'Reconnecting...';
+                setTimeout(connectWS, 3000);
+            };
+
+            ws.onerror = () => {
+                ws.close();
+            };
+        }
+
+        // ----------------------------------------------------------------
+        // Alert management
+        // ----------------------------------------------------------------
+        function addAlert(alert) {
+            alerts.unshift(alert);
+            if (alerts.length > 500) alerts.pop();
+
+            recentTimestamps.push(Date.now());
+            updateStats();
+            renderAlerts();
+        }
+
+        function updateStats() {
+            document.getElementById('totalAlerts').textContent = alerts.length;
+            document.getElementById('criticalCount').textContent =
+                alerts.filter(a => a.severity === 'critical').length;
+            document.getElementById('highCount').textContent =
+                alerts.filter(a => a.severity === 'high').length;
+
+            // Calculate alerts per minute
+            const now = Date.now();
+            recentTimestamps = recentTimestamps.filter(t => now - t < 60000);
+            document.getElementById('feedRate').textContent = recentTimestamps.length;
+        }
+
+        function renderAlerts() {
+            const feed = document.getElementById('alertFeed');
+            const filtered = activeFilter === 'all'
+                ? alerts
+                : alerts.filter(a => a.severity === activeFilter);
+
+            if (filtered.length === 0) {
+                feed.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🛡️</div>
+                        <p>No ${activeFilter === 'all' ? '' : activeFilter + ' '}alerts detected. Monitoring...</p>
+                    </div>`;
+                return;
+            }
+
+            feed.innerHTML = filtered.slice(0, 100).map((a, i) => `
+                <div class="alert-card${i === 0 ? ' new' : ''}">
+                    <div class="severity-badge severity-${a.severity}">${a.severity}</div>
+                    <div class="alert-info">
+                        <div class="alert-name">${escapeHtml(a.signature_name || a.threat_type)}</div>
+                        <div class="alert-desc">${escapeHtml(a.description || '')}</div>
+                        ${a.flow_key ? `<div class="alert-flow">${escapeHtml(a.flow_key)}</div>` : ''}
+                    </div>
+                    <div class="alert-confidence">${(a.confidence * 100).toFixed(0)}%</div>
+                    <div class="alert-time">${formatTime(a.timestamp)}</div>
+                </div>
+            `).join('');
+        }
+
+        // ----------------------------------------------------------------
+        // Utilities
+        // ----------------------------------------------------------------
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatTime(ts) {
+            if (!ts) return '';
+            const d = new Date(ts * 1000);
+            return d.toLocaleTimeString();
+        }
+
+        // ----------------------------------------------------------------
+        // Filter buttons
+        // ----------------------------------------------------------------
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                activeFilter = btn.dataset.filter;
+                renderAlerts();
+            });
+        });
+
+        // ----------------------------------------------------------------
+        // Initial load + connect
+        // ----------------------------------------------------------------
+        async function loadInitialAlerts() {
+            try {
+                const resp = await fetch(`${API_BASE}/api/alerts?limit=100`);
+                const data = await resp.json();
+                alerts = data.alerts || [];
+                updateStats();
+                renderAlerts();
+            } catch (e) {
+                console.warn('Failed to load initial alerts:', e);
+            }
+        }
+
+        loadInitialAlerts();
+        connectWS();
+        setInterval(updateStats, 5000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint (Ruff + Black)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install lint dependencies
+        run: pip install ruff black
+
+      - name: Run Ruff
+        run: ruff check core/ tests/ scripts/
+
+      - name: Run Black (check mode)
+        run: black --check core/ tests/ scripts/
+
+  security:
+    name: Security Scan (Bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install Bandit
+        run: pip install bandit[toml]
+
+      - name: Run Bandit
+        # -ll = report MEDIUM and HIGH only
+        # Fail the job on any HIGH severity finding
+        run: bandit -c .banditrc -r core/ -ll --exit-zero-on-skips
+
+  test:
+    name: Tests (pytest)
+    runs-on: ubuntu-latest
+    needs: [lint, security]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install pydantic python-decouple httpx
+          pip install fastapi uvicorn websockets
+          pip install pytest pytest-asyncio pytest-cov
+
+      - name: Run tests
+        env:
+          SIGNATURE_HMAC_SECRET: "ci-test-hmac-secret"
+          BLOCKCHAIN_PROVIDER: "none"
+        run: pytest --cov=core --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage.xml

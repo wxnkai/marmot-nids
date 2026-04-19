@@ -1,0 +1,30 @@
+# =============================================================================
+# marmot-nids — Bandit Security Scanner Configuration
+#
+# Run: bandit -c .banditrc -r core/ scripts/
+# Docs: https://bandit.readthedocs.io/en/latest/config.html
+# =============================================================================
+
+# Directories excluded from scanning.
+# Tests use assert statements and controlled fixture data that would produce
+# false positives. Scripts may use subprocess with controlled inputs.
+exclude_dirs:
+  - tests
+  - scripts
+  - .venv
+  - build
+  - dist
+  - contracts
+
+# Bandit test IDs to skip globally.
+# B101 (assert_used): Asserts are acceptable in non-test code for invariant checks.
+skips:
+  - B101
+
+# Minimum severity level to report (LOW, MEDIUM, HIGH).
+# We report MEDIUM and above to avoid noise from low-severity informational findings.
+# All HIGH findings must be resolved before merge — enforced in CI.
+assert_used:
+  skips:
+    - "test_*.py"
+    - "*_test.py"

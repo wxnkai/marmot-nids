@@ -1,0 +1,111 @@
+# =============================================================================
+# marmot-nids — Docker Compose orchestration
+# =============================================================================
+# Services:
+#   nids       — Main detection engine + FastAPI + dashboard
+#   ollama     — Local LLM inference server (Gemma3)
+#   hardhat    — Local Ethereum development node (optional)
+#
+# Usage:
+#   docker compose up                  # All services
+#   docker compose up nids             # Detection only (NullProvider + no LLM)
+#   docker compose up nids ollama      # Detection + LLM (no blockchain)
+#   docker compose --profile blockchain up  # All services including Hardhat
+#
+# Security notes:
+#   - CAP_NET_RAW is granted only to the nids container
+#   - network_mode: host gives the nids container access to all interfaces
+#     (required for promiscuous packet capture). Use with caution.
+#   - Private keys and HMAC secrets are injected via .env file
+#   - Ollama binds to localhost only — not exposed to external networks
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # NIDS — Main detection engine
+  # ---------------------------------------------------------------------------
+  nids:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: marmot-nids
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    env_file:
+      - .env
+    environment:
+      - OLLAMA_BASE_URL=http://localhost:11434
+      - BLOCKCHAIN_PROVIDER=${BLOCKCHAIN_PROVIDER:-none}
+    volumes:
+      - ./signatures:/app/signatures:ro
+      - ./dashboard:/app/dashboard:ro
+      - nids-data:/app/data
+    depends_on:
+      ollama:
+        condition: service_started
+        required: false
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; r = httpx.get('http://localhost:8000/api/health'); exit(0 if r.status_code == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # Ollama — Local LLM inference
+  # ---------------------------------------------------------------------------
+  ollama:
+    image: ollama/ollama:latest
+    container_name: marmot-ollama
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    deploy:
+      resources:
+        reservations:
+          memory: 4G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Hardhat — Local Ethereum node (optional, blockchain profile)
+  # ---------------------------------------------------------------------------
+  hardhat:
+    image: node:20-slim
+    container_name: marmot-hardhat
+    profiles:
+      - blockchain
+    restart: unless-stopped
+    working_dir: /app
+    command: >
+      sh -c "npm install --save-dev hardhat @openzeppelin/contracts &&
+             npx hardhat node --hostname 0.0.0.0"
+    ports:
+      - "127.0.0.1:8545:8545"
+    volumes:
+      - hardhat-data:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8545"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  nids-data:
+    driver: local
+  ollama-models:
+    driver: local
+  hardhat-data:
+    driver: local
